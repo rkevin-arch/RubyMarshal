@@ -89,7 +89,7 @@ class Reader:
                 if options & 4:
                     flags |= re.MULTILINE
             attributes = self.read_attributes()
-            print(result, attributes)
+            #print(result, attributes)
             if sub_token in (TYPE_STRING, TYPE_REGEXP):
                 encoding = self._get_encoding(attributes)
                 result = result.decode(encoding)
@@ -292,11 +292,11 @@ def load(fd, registry=None):
 
     loader = Reader(fd, registry=registry)
     obj = loader.read()
-    print(obj, len(loader.objects))
-    for i in range(len(loader.objects)):
-        print(i,loader.objects[i])
-    while loader.foundUnresolvedRubyLink:
-        loader.foundUnresolvedRubyLink = False
+    #print(obj, len(loader.objects))
+    #for i in range(len(loader.objects)):
+    #    print(i,loader.objects[i])
+    #while loader.foundUnresolvedRubyLink:
+    #    loader.foundUnresolvedRubyLink = False
         #obj = RecursiveResolveUnlinkedObjs(obj, loader)
     return obj
 
