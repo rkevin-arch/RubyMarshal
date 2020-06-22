@@ -10,6 +10,7 @@ from rubymarshal.classes import (
     RubyString,
     RubyObject,
     registry as global_registry,
+    RubyLink,
 )
 from rubymarshal.constants import (
     TYPE_NIL,
@@ -46,13 +47,14 @@ class Reader:
         self.objects = []
         self.fd = fd
         self.registry = registry or global_registry
+        self.foundUnresolvedRubyLink = False
 
     def read(self, token=None):
         if token is None:
             token = self.fd.read(1)
         object_index = None
         if token in (
-            TYPE_IVAR,
+            #TYPE_IVAR,
             # TYPE_EXTENDED, TYPE_UCLASS, ????
             TYPE_CLASS,
             TYPE_MODULE,
@@ -65,6 +67,7 @@ class Reader:
             TYPE_OBJECT,
             TYPE_DATA,
             TYPE_USRMARSHAL,
+            TYPE_STRING,
         ):
             self.objects.append(None)
             object_index = len(self.objects)
@@ -86,6 +89,7 @@ class Reader:
                 if options & 4:
                     flags |= re.MULTILINE
             attributes = self.read_attributes()
+            print(result, attributes)
             if sub_token in (TYPE_STRING, TYPE_REGEXP):
                 encoding = self._get_encoding(attributes)
                 result = result.decode(encoding)
@@ -99,6 +103,7 @@ class Reader:
         elif token == TYPE_STRING:
             size = self.read_long()
             result = self.fd.read(size)
+            # can't decode here since so many other things rely on this being a bytes object. oh well
         elif token == TYPE_SYMBOL:
             result = self.read_symreal()
         elif token == TYPE_FIXNUM:
@@ -148,6 +153,8 @@ class Reader:
             result = self.read_symlink()
         elif token == TYPE_LINK:
             link_id = self.read_long()
+            #self.foundUnresolvedRubyLink = True
+            #result = RubyLink(link_id)
             result = self.objects[link_id]
         elif token == TYPE_USERDEF:
             class_symbol = self.read()
@@ -205,7 +212,7 @@ class Reader:
         encoding = "latin1"
         if attrs.get("E") is True:
             encoding = "utf-8"
-        elif "encoding" in attrs:
+        elif "encoding" in attrs and type(attrs["encoding"]) is not RubyLink:
             encoding = attrs["encoding"].decode()
         return encoding
 
@@ -264,13 +271,34 @@ class Reader:
         self.symbols.append(result)
         return result
 
+def RecursiveResolveUnlinkedObjs(obj, loader):
+    if type(obj) is list:
+        return [RecursiveResolveUnlinkedObjs(i,loader) for i in obj]
+    if type(obj) is RubyLink:
+        loader.foundUnresolvedRubyLink = True
+        return loader.objects[obj.linkid]
+    if type(obj) is RubyObject:
+        for k,v in obj.attributes.items():
+            obj.attributes[k]=RecursiveResolveUnlinkedObjs(v,loader)
+    if type(obj) is dict:
+        for k,v in obj.items():
+            obj[k]=RecursiveResolveUnlinkedObjs(v,loader)
+    return obj
+
 
 def load(fd, registry=None):
     assert fd.read(1) == b"\x04"
     assert fd.read(1) == b"\x08"
 
     loader = Reader(fd, registry=registry)
-    return loader.read()
+    obj = loader.read()
+    print(obj, len(loader.objects))
+    for i in range(len(loader.objects)):
+        print(i,loader.objects[i])
+    while loader.foundUnresolvedRubyLink:
+        loader.foundUnresolvedRubyLink = False
+        #obj = RecursiveResolveUnlinkedObjs(obj, loader)
+    return obj
 
 
 def loads(byte_text, registry=None):

@@ -180,3 +180,9 @@ class ClassRegistry:
 
 
 registry = ClassRegistry()
+
+class RubyLink:
+    def __init__(self, linkid):
+        self.linkid=linkid
+    def __repr__(self):
+        return "UnresolvedRubyLink(%d)"%self.linkid
